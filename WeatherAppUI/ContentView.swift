@@ -11,25 +11,55 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppUIState.self) private var appState: AppUIState
+    @State private var isFetchingWeather: Bool = false
     
     let geocodingClient = GeocodingClient()
     
     var body: some View {
         @Bindable var appState = appState
         
-            TextField("Enter city name", text: $appState.city)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .onSubmit {
-                    fetchWeather()
-                }.padding()
-    
+        VStack {
+            TextField("City", text: $appState.city)
+                .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        isFetchingWeather = true
+            
+                    }.task(id: isFetchingWeather) {
+                        if isFetchingWeather {
+                           await  fetchWeather()
+                            isFetchingWeather = false
+                            appState.city = ""
+                        }
+                }
+            
+            if(isFetchingWeather == true){
+            ProgressView("Loading...")
+        }
+            
+        Spacer()
+            
         if let temp = appState.temp {
-            Text("\(temp.formatted()) ºF")
-                .font(.largeTitle)
+            Text(MeasurementFormatter.temperature(value: temp))
+                .font(.system(size: 100))
         }
         
         Spacer()
+        }.padding()
+        
     }
+        
+    
+    private func fetchWeather() async {
+        do {
+            guard let location = try await geocodingClient.coordinateByCity(appState.city) else { return }
+            let weather = try await geocodingClient.weatherByLatLon(location.lat, location.lon)
+            appState.temp = weather
+        } catch {
+            print(error)
+        }
+    }
+    
+    /*
     
     private func fetchWeather() {
         Task {
@@ -45,6 +75,7 @@ struct ContentView: View {
             appState.temp = temp
         }
     }
+     */
     
 }
 
